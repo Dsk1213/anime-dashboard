@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动漫数据可视化大屏</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "微软雅黑", sans-serif; }
+        body {
+            background: #0f172a;
+            color: #fff;
+            padding: 20px;
+            overflow-x: hidden;
+            transition: all 0.3s ease;
+        }
+        .screen-title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        /* 搜索框 */
+        .search-box {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #searchInput {
+            padding: 10px 15px;
+            width: 400px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: #1e293b;
+            color: #fff;
+            outline: none;
+        }
+        #searchBtn {
+            padding: 10px 20px;
+            margin-left: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: #38bdf8;
+            color: #0f172a;
+            cursor: pointer;
+        }
+
+        /* 数据概览卡片 */
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .overview-card {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .overview-card .label {
+            font-size: 16px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+        .overview-card .value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        /* 内容布局：左排行榜，右图表 */
+        .content-layout {
+            display: grid;
+            grid-template-columns: 60% 40%;
+            gap: 20px;
+        }
+
+        /* 排行榜样式 */
+        .rank-section {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #475569;
+        }
+        .rank-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .rank-tab {
+            padding: 8px 16px;
+            background: #475569;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .rank-tab.active {
+            background: #38bdf8;
+            color: #0f172a;
+        }
+        .rank-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .rank-table th,
+        .rank-table td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #475569;
+        }
+        .rank-table th {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        .rank-table td {
+            color: #fff;
+            font-size: 14px;
+        }
+        .rank-item:hover {
+            background: #273449;
+        }
+        .rank-number {
+            font-size: 16px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        .rank-number.top3:nth-child(1) { color: #fbbf24; }
+        .rank-number.top3:nth-child(2) { color: #94a3b8; }
+        .rank-number.top3:nth-child(3) { color: #f59e0b; }
+        .anime-title { font-weight: bold; }
+        .episode-count { color: #86efac; }
+        .follow-count { color: #38bdf8; }
+
+        /* 图表区域 */
+        .chart-section {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+        }
+        .chart-card {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            height: 380px;
+        }
+        .chart-container {
+            width: 100%;
+            height: 320px;
+        }
+
+        /* 分页样式 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 8px;
+        }
+        .page-btn {
+            padding: 8px 16px;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            background: #273449;
+            color: #fff;
+            cursor: pointer;
+        }
+        .page-btn.active {
+            background: #38bdf8;
+            color: #0f172a;
+            border-color: #38bdf8;
+        }
+        .page-btn:disabled {
+            cursor: not-allowed;
+            color: #64748b;
+            background: #1e293b;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="screen-title">动漫数据可视化大屏</h1>
+
+    <!-- 主题切换按钮 -->
+    <div style="position: absolute; top: 20px; right: 20px;">
+        <button id="themeToggle" onclick="toggleTheme()" style="padding: 8px 16px; background: #1e293b; border: 1px solid #38bdf8; border-radius: 8px; color: #38bdf8; cursor: pointer;">切换亮色模式</button>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="输入动漫名称搜索">
+        <button id="searchBtn" onclick="searchAnime()">搜索</button>
+    </div>
+
+    <!-- 集数范围筛选 -->
+    <div class="filter-box" style="text-align: center; margin-bottom: 20px;">
+        <label for="minEpisodes">集数范围：</label>
+        <input type="number" id="minEpisodes" placeholder="最小" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
+        <span> - </span>
+        <input type="number" id="maxEpisodes" placeholder="最大" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
+        <button onclick="filterByEpisodes()" style="padding: 5px 15px; margin-left: 10px; background: #38bdf8; border: none; border-radius: 4px; color: #0f172a; cursor: pointer;">筛选</button>
+    </div>
+
+    <!-- 数据概览卡片 -->
+    <div class="overview-cards">
+        <div class="overview-card">
+            <div class="label">总计动漫数量</div>
+            <div class="value" id="totalAnime">--</div>
+        </div>
+        <div class="overview-card">
+            <div class="label">平均集数</div>
+            <div class="value" id="avgEpisode">--</div>
+        </div>
+        <div class="overview-card">
+            <div class="label">最高追番数</div>
+            <div class="value" id="maxFollow">--</div>
+        </div>
+    </div>
+
+    <!-- 主要内容布局 -->
+    <div class="content-layout">
+        <!-- 排行榜区域 -->
+        <div class="rank-section">
+            <div class="section-title">动漫排行榜</div>
+            <div class="rank-tabs">
+                <div class="rank-tab active" onclick="switchRank('follow')">按追番数排行</div>
+                <div class="rank-tab" onclick="switchRank('episode')">按集数排行</div>
+            </div>
+            <table class="rank-table">
+                <thead>
+                    <tr>
+                        <th width="80">排名</th>
+                        <th>动漫名称</th>
+                        <th width="120">集数/上映信息</th>
+                        <th width="120">追番数(万)</th>
+                    </tr>
+                </thead>
+                <tbody id="rankBody">
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #94a3b8;">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+            <!-- 分页控件 -->
+            <div class="pagination">
+                <button class="page-btn" id="prevBtn" onclick="changePage(-1)" disabled>上一页</button>
+                <span id="pageInfo">第 1 页 / 共 0 页</span>
+                <button class="page-btn" id="nextBtn" onclick="changePage(1)" disabled>下一页</button>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="chart-section">
+            <!-- 追番数TOP10柱状图 -->
+            <div class="chart-card">
+                <div class="section-title">追番数TOP10</div>
+                <div class="chart-container" id="followTop10Chart"></div>
+            </div>
+            <!-- 集数分布饼图 -->
+            <div class="chart-card">
+                <div class="section-title">集数分布</div>
+                <div class="chart-container" id="episodePieChart"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let allData = [];
+        let currentRankType = 'follow';
+        let currentPage = 1;
+        const pageSize = 20;
+        let searchKeyword = '';
+        let isDarkMode = true;
+
+        // ECharts实例
+        let followTop10Chart = null;
+        let episodePieChart = null;
+
+        // 页面加载初始化
+        window.onload = async function() {
+            try {
+                await loadCSV();
+                initCharts();
+                updateAll();
+                // 添加图表点击事件
+                followTop10Chart.on('click', function (params) {
+                    const animeName = params.name;
+                    document.getElementById('searchInput').value = animeName;
+                    searchAnime();
+                });
+            } catch (err) {
+                console.error(err);
+                alert("加载失败");
+            }
+        };
+
+        // 搜索功能
+        function searchAnime() {
+            searchKeyword = document.getElementById('searchInput').value.trim();
+            currentPage = 1;
+            renderRank();
+            updatePagination();
+        }
+
+        // 集数范围筛选
+        function filterByEpisodes() {
+            currentPage = 1;
+            renderRank();
+            updatePagination();
+        }
+
+        // 主题切换
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            const body = document.body;
+            const button = document.getElementById('themeToggle');
+            if (isDarkMode) {
+                body.style.backgroundColor = '#0f172a';
+                body.style.color = '#fff';
+                button.textContent = '切换亮色模式';
+                button.style.background = '#1e293b';
+                button.style.color = '#38bdf8';
+                button.style.borderColor = '#38bdf8';
+            } else {
+                body.style.backgroundColor = '#f0f2f5';
+                body.style.color = '#333';
+                button.textContent = '切换暗黑模式';
+                button.style.background = '#fff';
+                button.style.color = '#1890ff';
+                button.style.borderColor = '#1890ff';
+            }
+            updateCharts();
+        }
+
+        // 统一更新所有内容
+        function updateAll() {
+            updateOverview();
+            updateCharts();
+            renderRank();
+            updatePagination();
+        }
+
+        // 读取CSV数据
+        async function loadCSV() {
+            const response = await fetch('bilibili_anime.csv');
+            const text = await response.text();
+            const lines = text.trim().split('\n');
+            allData = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                if (values.length < 6) continue;
+                const row = {};
+                row.anime_name = values[0]?.trim() || '未知名称';
+                row.follow_count = parseFloat(values[3]?.replace('万', '').trim()) || 0;
+                row.episode_original = values[4]?.trim() || '无信息';
+                const episodeMatch = row.episode_original.match(/(\d+)/);
+                row.episode_count = episodeMatch ? parseInt(episodeMatch[1], 10) : 0;
+                allData.push(row);
+            }
+        }
+
+        // 初始化图表
+        function initCharts() {
+            followTop10Chart = echarts.init(document.getElementById('followTop10Chart'));
+            episodePieChart = echarts.init(document.getElementById('episodePieChart'));
+        }
+
+        // 更新数据概览
+        function updateOverview() {
+            document.getElementById('totalAnime').innerText = allData.length;
+            const totalEpisode = allData.reduce((sum, item) => sum + item.episode_count, 0);
+            const avgEpisode = allData.length > 0 ? (totalEpisode / allData.length).toFixed(1) : 0;
+            document.getElementById('avgEpisode').innerText = avgEpisode;
+            const maxFollow = Math.max(...allData.map(item => item.follow_count), 0);
+            document.getElementById('maxFollow').innerText = maxFollow.toFixed(1) + '万';
+        }
+
+        // 渲染排行榜（带搜索和筛选）
+        function renderRank() {
+            const rankBody = document.getElementById('rankBody');
+            rankBody.innerHTML = '';
+
+            let sortedData = [...allData];
+
+            // 搜索过滤
+            if (searchKeyword) {
+                sortedData = sortedData.filter(item =>
+                    item.anime_name.includes(searchKeyword)
+                );
+            }
+
+            // 集数范围过滤
+            const min = parseInt(document.getElementById('minEpisodes').value) || 0;
+            const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
+            sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
+
+            // 排序
+            if (currentRankType === 'follow') {
+                sortedData.sort((a, b) => b.follow_count - a.follow_count);
+            } else {
+                sortedData.sort((a, b) => b.episode_count - a.episode_count);
+            }
+
+            // 分页
+            const totalPages = Math.ceil(sortedData.length / pageSize);
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, sortedData.length);
+            const pageData = sortedData.slice(startIndex, endIndex);
+
+            // 渲染
+            for (let i = 0; i < pageData.length; i++) {
+                const item = pageData[i];
+                const realRank = startIndex + i + 1;
+                const tr = document.createElement('tr');
+                tr.className = 'rank-item';
+                const rankClass = realRank <= 3 ? 'top3' : '';
+                tr.innerHTML = `
+                    <td><span class="rank-number ${rankClass}">${realRank}</span></td>
+                    <td><div class="anime-title">${item.anime_name}</div></td>
+                    <td><span class="episode-count">${item.episode_original}</span></td>
+                    <td><span class="follow-count">${item.follow_count.toFixed(1)}</span></td>
+                `;
+                rankBody.appendChild(tr);
+            }
+        }
+
+        // 更新分页
+        function updatePagination() {
+            let sortedData = [...allData];
+            if (searchKeyword) {
+                sortedData = sortedData.filter(item =>
+                    item.anime_name.includes(searchKeyword)
+                );
+            }
+            const min = parseInt(document.getElementById('minEpisodes').value) || 0;
+            const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
+            sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
+            if (currentRankType === 'episode') {
+                sortedData = sortedData.filter(item => item.episode_count > 0);
+            }
+            const totalPages = Math.ceil(sortedData.length / pageSize);
+            document.getElementById('pageInfo').innerText = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        }
+
+        // 更新图表
+        function updateCharts() {
+            // 追番数TOP10
+            const followSorted = [...allData].sort((a, b) => b.follow_count - a.follow_count).slice(0, 10);
+            followTop10Chart.setOption({
+                backgroundColor: 'transparent',
+                textStyle: { color: isDarkMode ? '#fff' : '#333' },
+                xAxis: {
+                    type: 'category',
+                    data: followSorted.map(item => item.anime_name),
+                    axisLabel: { color: isDarkMode ? '#94a3b8' : '#666', rotate: 45 },
+                    axisLine: { lineStyle: { color: isDarkMode ? '#475569' : '#e0e0e0' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: isDarkMode ? '#94a3b8' : '#666' },
+                    axisLine: { lineStyle: { color: isDarkMode ? '#475569' : '#e0e0e0' } },
+                    splitLine: { lineStyle: { color: isDarkMode ? '#273449' : '#e8e8e8' } }
+                },
+                series: [{
+                    data: followSorted.map(item => item.follow_count),
+                    type: 'bar',
+                    itemStyle: { color: '#38bdf8' },
+                    label: { show: true, position: 'top', color: isDarkMode ? '#fff' : '#333' },
+                    emphasis: { focus: 'series' }
+                }],
+                grid: { left: '10%', right: '5%', top: '15%', bottom: '25%' }
+            });
+
+            // 集数分布饼图
+            const episodeGroups = {
+                '短篇(≤12话)': 0,'中篇(13-24话)': 0,'长篇(25-50话)': 0,'超长篇(>50话)': 0,'无数字信息': 0
+            };
+            allData.forEach(item => {
+                if (item.episode_count === 0) episodeGroups['无数字信息']++;
+                else if (item.episode_count <=12) episodeGroups['短篇(≤12话)']++;
+                else if (item.episode_count <=24) episodeGroups['中篇(13-24话)']++;
+                else if (item.episode_count <=50) episodeGroups['长篇(25-50话)']++;
+                else episodeGroups['超长篇(>50话)']++;
+            });
+            const pieData = Object.keys(episodeGroups).map(key => ({name:key, value:episodeGroups[key]})).filter(i=>i.value>0);
+            episodePieChart.setOption({
+                backgroundColor: 'transparent',
+                textStyle: { color: isDarkMode ? '#fff' : '#333' },
+                tooltip: { trigger: 'item' },
+                legend: { textStyle: { color: isDarkMode ? '#94a3b8' : '#666' } },
+                series: [{
+                    name: '集数分布',
+                    type: 'pie',
+                    radius: ['45%','75%'],
+                    center: ['40%','50%'],
+                    data: pieData,
+                    label: { color: isDarkMode ? '#fff' : '#333' }
+                }]
+            });
+        }
+
+        // 切换排行
+        function switchRank(type) {
+            document.querySelectorAll('.rank-tab').forEach(t=>t.classList.remove('active'));
+            event.target.classList.add('active');
+            currentRankType = type;
+            currentPage = 1;
+            renderRank();
+            updatePagination();
+        }
+
+        // 切换页码
+        function changePage(delta) {
+            let sortedData = [...allData];
+            if (searchKeyword) sortedData = sortedData.filter(item=>item.anime_name.includes(searchKeyword));
+            const min = parseInt(document.getElementById('minEpisodes').value) || 0;
+            const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
+            sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
+            if (currentRankType==='episode') sortedData = sortedData.filter(item=>item.episode_count>0);
+            const totalPages = Math.ceil(sortedData.length/pageSize);
+            currentPage += delta;
+            currentPage = Math.max(1, Math.min(currentPage, totalPages));
+            renderRank();
+            updatePagination();
+        }
+
+        window.addEventListener('resize', function() {
+            followTop10Chart.resize();
+            episodePieChart.resize();
+        });
+    </script>
+</body>
+</html>
