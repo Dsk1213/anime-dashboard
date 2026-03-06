@@ -52,7 +52,7 @@
         /* 数据概览卡片 */
         .overview-cards {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -77,7 +77,7 @@
         /* 内容布局：左排行榜，右图表 */
         .content-layout {
             display: grid;
-            grid-template-columns: 60% 40%;
+            grid-template-columns: 65% 35%;
             gap: 20px;
         }
 
@@ -145,6 +145,7 @@
         .anime-title { font-weight: bold; }
         .episode-count { color: #86efac; }
         .follow-count { color: #38bdf8; }
+        .release-time { color: #f97316; }
 
         /* 图表区域 */
         .chart-section {
@@ -189,6 +190,30 @@
             color: #64748b;
             background: #1e293b;
         }
+
+        /* 上映时间筛选 */
+        .release-filter-box {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .release-filter-box input {
+            width: 150px;
+            padding: 5px;
+            margin: 0 5px;
+            background: #1e293b;
+            border: none;
+            border-radius: 4px;
+            color: white;
+        }
+        .release-filter-box button {
+            padding: 5px 15px;
+            margin-left: 10px;
+            background: #38bdf8;
+            border: none;
+            border-radius: 4px;
+            color: #0f172a;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -201,17 +226,27 @@
 
     <!-- 搜索框 -->
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="输入动漫名称搜索">
+        <input type="text" id="searchInput" placeholder="输入动漫名称/上映时间搜索">
         <button id="searchBtn" onclick="searchAnime()">搜索</button>
     </div>
 
-    <!-- 集数范围筛选 -->
-    <div class="filter-box" style="text-align: center; margin-bottom: 20px;">
-        <label for="minEpisodes">集数范围：</label>
-        <input type="number" id="minEpisodes" placeholder="最小" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
-        <span> - </span>
-        <input type="number" id="maxEpisodes" placeholder="最大" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
-        <button onclick="filterByEpisodes()" style="padding: 5px 15px; margin-left: 10px; background: #38bdf8; border: none; border-radius: 4px; color: #0f172a; cursor: pointer;">筛选</button>
+    <!-- 筛选区域 -->
+    <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px;">
+        <!-- 集数范围筛选 -->
+        <div class="filter-box">
+            <label for="minEpisodes">集数范围：</label>
+            <input type="number" id="minEpisodes" placeholder="最小" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
+            <span> - </span>
+            <input type="number" id="maxEpisodes" placeholder="最大" style="width: 80px; padding: 5px; margin: 0 5px; background: #1e293b; border: none; border-radius: 4px; color: white;">
+            <button onclick="filterByEpisodes()" style="padding: 5px 15px; margin-left: 10px; background: #38bdf8; border: none; border-radius: 4px; color: #0f172a; cursor: pointer;">筛选</button>
+        </div>
+
+        <!-- 上映时间筛选 -->
+        <div class="release-filter-box">
+            <label for="releaseYear">上映年份：</label>
+            <input type="text" id="releaseYear" placeholder="例如：1992/2024" style="width: 100px;">
+            <button onclick="filterByReleaseYear()">筛选</button>
+        </div>
     </div>
 
     <!-- 数据概览卡片 -->
@@ -228,6 +263,10 @@
             <div class="label">最高追番数</div>
             <div class="value" id="maxFollow">--</div>
         </div>
+        <div class="overview-card">
+            <div class="label">最早上映年份</div>
+            <div class="value" id="minReleaseYear">--</div>
+        </div>
     </div>
 
     <!-- 主要内容布局 -->
@@ -238,19 +277,21 @@
             <div class="rank-tabs">
                 <div class="rank-tab active" onclick="switchRank('follow')">按追番数排行</div>
                 <div class="rank-tab" onclick="switchRank('episode')">按集数排行</div>
+                <div class="rank-tab" onclick="switchRank('release')">按上映时间排行</div>
             </div>
             <table class="rank-table">
                 <thead>
                     <tr>
                         <th width="80">排名</th>
                         <th>动漫名称</th>
-                        <th width="120">集数/上映信息</th>
-                        <th width="120">追番数(万)</th>
+                        <th width="100">集数</th>
+                        <th width="120">上映时间</th>
+                        <th width="100">追番数(万)</th>
                     </tr>
                 </thead>
                 <tbody id="rankBody">
                     <tr>
-                        <td colspan="4" style="text-align: center; color: #94a3b8;">加载中...</td>
+                        <td colspan="5" style="text-align: center; color: #94a3b8;">加载中...</td>
                     </tr>
                 </tbody>
             </table>
@@ -285,6 +326,7 @@
         const pageSize = 20;
         let searchKeyword = '';
         let isDarkMode = true;
+        let releaseYearFilter = '';
 
         // ECharts实例
         let followTop10Chart = null;
@@ -304,13 +346,15 @@
                 });
             } catch (err) {
                 console.error(err);
-                alert("加载失败");
+                alert("加载失败，请检查CSV文件路径和格式！");
             }
         };
 
-        // 搜索功能
+        // 搜索功能（支持动漫名称+上映时间）
         function searchAnime() {
             searchKeyword = document.getElementById('searchInput').value.trim();
+            releaseYearFilter = '';
+            document.getElementById('releaseYear').value = '';
             currentPage = 1;
             renderRank();
             updatePagination();
@@ -318,6 +362,14 @@
 
         // 集数范围筛选
         function filterByEpisodes() {
+            currentPage = 1;
+            renderRank();
+            updatePagination();
+        }
+
+        // 上映年份筛选
+        function filterByReleaseYear() {
+            releaseYearFilter = document.getElementById('releaseYear').value.trim();
             currentPage = 1;
             renderRank();
             updatePagination();
@@ -354,21 +406,80 @@
             updatePagination();
         }
 
-        // 读取CSV数据
+        // 年份解析函数（兼容 92年、22年、2025年 所有格式）
+        function parseReleaseYear(releaseTime) {
+            if (!releaseTime || releaseTime === '未知') return 0;
+
+            // 匹配4位年份（2025、1992）
+            const fullYearMatch = releaseTime.match(/(\d{4})/);
+            if (fullYearMatch) {
+                return parseInt(fullYearMatch[1], 10);
+            }
+
+            // 匹配2位年份（92、22、24）
+            const shortYearMatch = releaseTime.match(/(\d{2})年/);
+            if (shortYearMatch) {
+                const shortYear = parseInt(shortYearMatch[1], 10);
+                // 规则：00-50 → 2000-2050；51-99 → 1951-1999
+                return shortYear <= 50 ? 2000 + shortYear : 1900 + shortYear;
+            }
+
+            return 0;
+        }
+
+        // 上映时间格式化显示（统一样式）
+        function formatReleaseTime(releaseTime) {
+            if (!releaseTime || releaseTime === '未知') return '未知';
+
+            // 处理 2025-07-10 → 2025年07月10日
+            const dateMatch = releaseTime.match(/(\d{4})-(\d{2})-(\d{2})/);
+            if (dateMatch) {
+                return `${dateMatch[1]}年${dateMatch[2]}月${dateMatch[3]}日`;
+            }
+
+            // 处理 92年4月开播 → 1992年4月开播
+            return releaseTime.replace(/(\d{2})年/, (match, p1) => {
+                const shortYear = parseInt(p1, 10);
+                const fullYear = shortYear <= 50 ? 2000 + shortYear : 1900 + shortYear;
+                return `${fullYear}年`;
+            });
+        }
+
+        // 读取CSV数据（适配中文列名+多格式年份）
         async function loadCSV() {
-            const response = await fetch('bilibili_anime.csv');
+            // 请确认CSV路径：
+            // 如果sj.csv和index.html同目录 → 'sj.csv'
+            // 如果在上级data目录 → '../data/sj.csv'
+            const response = await fetch('sj.csv');
             const text = await response.text();
             const lines = text.trim().split('\n');
             allData = [];
+
+            // 解析表头（兼容带引号的列名："番剧名称","追番数"...）
+            const header = lines[0]?.split(',').map(h => h.trim().replace(/"/g, ''));
+            const nameIndex = header?.indexOf('番剧名称') ?? 0;
+            const followIndex = header?.indexOf('追番数') ?? 1;
+            const episodeIndex = header?.indexOf('集数') ?? 2;
+            const releaseIndex = header?.indexOf('上映时间') ?? 3;
+
             for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',');
-                if (values.length < 6) continue;
+                const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                if (values.length < 4) continue;
+
                 const row = {};
-                row.anime_name = values[0]?.trim() || '未知名称';
-                row.follow_count = parseFloat(values[3]?.replace('万', '').trim()) || 0;
-                row.episode_original = values[4]?.trim() || '无信息';
+                // 核心字段解析
+                row.anime_name = values[nameIndex] || '未知名称';
+                row.follow_count = parseFloat((values[followIndex] || '0').replace('万', '')) || 0;
+                row.episode_original = values[episodeIndex] || '无信息';
+                row.release_time = values[releaseIndex] || '未知';
+
+                // 解析集数数字
                 const episodeMatch = row.episode_original.match(/(\d+)/);
                 row.episode_count = episodeMatch ? parseInt(episodeMatch[1], 10) : 0;
+
+                // 解析上映年份（兼容所有格式）
+                row.release_year = parseReleaseYear(row.release_time);
+
                 allData.push(row);
             }
         }
@@ -381,77 +492,123 @@
 
         // 更新数据概览
         function updateOverview() {
+            // 基础统计
             document.getElementById('totalAnime').innerText = allData.length;
             const totalEpisode = allData.reduce((sum, item) => sum + item.episode_count, 0);
             const avgEpisode = allData.length > 0 ? (totalEpisode / allData.length).toFixed(1) : 0;
             document.getElementById('avgEpisode').innerText = avgEpisode;
             const maxFollow = Math.max(...allData.map(item => item.follow_count), 0);
             document.getElementById('maxFollow').innerText = maxFollow.toFixed(1) + '万';
+
+            // 上映年份统计
+            const validReleaseYears = allData.filter(item => item.release_year > 0).map(item => item.release_year);
+            const minReleaseYear = validReleaseYears.length > 0 ? Math.min(...validReleaseYears) : '未知';
+            document.getElementById('minReleaseYear').innerText = minReleaseYear;
         }
 
-        // 渲染排行榜（带搜索和筛选）
+        // 渲染排行榜
         function renderRank() {
             const rankBody = document.getElementById('rankBody');
             rankBody.innerHTML = '';
 
             let sortedData = [...allData];
 
-            // 搜索过滤
+            // 1. 搜索过滤（名称+上映时间）
             if (searchKeyword) {
                 sortedData = sortedData.filter(item =>
-                    item.anime_name.includes(searchKeyword)
+                    item.anime_name.includes(searchKeyword) ||
+                    formatReleaseTime(item.release_time).includes(searchKeyword)
                 );
             }
 
-            // 集数范围过滤
+            // 2. 集数范围过滤
             const min = parseInt(document.getElementById('minEpisodes').value) || 0;
             const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
             sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
 
-            // 排序
-            if (currentRankType === 'follow') {
-                sortedData.sort((a, b) => b.follow_count - a.follow_count);
-            } else {
-                sortedData.sort((a, b) => b.episode_count - a.episode_count);
+            // 3. 上映年份筛选（兼容 1992/92/2024/24 格式）
+            if (releaseYearFilter) {
+                sortedData = sortedData.filter(item => {
+                    if (item.release_year === 0) return false;
+                    // 支持输入 92 → 匹配1992，输入24→匹配2024，输入2024→匹配2024
+                    const yearStr = item.release_year.toString();
+                    return yearStr === releaseYearFilter || yearStr.endsWith(releaseYearFilter);
+                });
             }
 
-            // 分页
+            // 4. 排序
+            if (currentRankType === 'follow') {
+                sortedData.sort((a, b) => b.follow_count - a.follow_count);
+            } else if (currentRankType === 'episode') {
+                sortedData.sort((a, b) => b.episode_count - a.episode_count);
+            } else if (currentRankType === 'release') {
+                // 按上映年份倒序（最新的在前）
+                sortedData.sort((a, b) => {
+                    if (a.release_year === 0) return 1;
+                    if (b.release_year === 0) return -1;
+                    return b.release_year - a.release_year;
+                });
+            }
+
+            // 5. 分页
             const totalPages = Math.ceil(sortedData.length / pageSize);
             const startIndex = (currentPage - 1) * pageSize;
             const endIndex = Math.min(startIndex + pageSize, sortedData.length);
             const pageData = sortedData.slice(startIndex, endIndex);
 
-            // 渲染
+            // 6. 渲染
             for (let i = 0; i < pageData.length; i++) {
                 const item = pageData[i];
                 const realRank = startIndex + i + 1;
                 const tr = document.createElement('tr');
                 tr.className = 'rank-item';
                 const rankClass = realRank <= 3 ? 'top3' : '';
+
                 tr.innerHTML = `
                     <td><span class="rank-number ${rankClass}">${realRank}</span></td>
                     <td><div class="anime-title">${item.anime_name}</div></td>
                     <td><span class="episode-count">${item.episode_original}</span></td>
+                    <td><span class="release-time">${formatReleaseTime(item.release_time)}</span></td>
                     <td><span class="follow-count">${item.follow_count.toFixed(1)}</span></td>
                 `;
                 rankBody.appendChild(tr);
+            }
+
+            // 空数据提示
+            if (sortedData.length === 0) {
+                rankBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #94a3b8;">暂无匹配数据</td></tr>`;
             }
         }
 
         // 更新分页
         function updatePagination() {
             let sortedData = [...allData];
+
+            // 应用所有筛选条件
             if (searchKeyword) {
                 sortedData = sortedData.filter(item =>
-                    item.anime_name.includes(searchKeyword)
+                    item.anime_name.includes(searchKeyword) ||
+                    formatReleaseTime(item.release_time).includes(searchKeyword)
                 );
             }
             const min = parseInt(document.getElementById('minEpisodes').value) || 0;
             const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
             sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
+            if (releaseYearFilter) {
+                sortedData = sortedData.filter(item => {
+                    if (item.release_year === 0) return false;
+                    const yearStr = item.release_year.toString();
+                    return yearStr === releaseYearFilter || yearStr.endsWith(releaseYearFilter);
+                });
+            }
+
+            // 排序过滤
             if (currentRankType === 'episode') {
                 sortedData = sortedData.filter(item => item.episode_count > 0);
+            } else if (currentRankType === 'release') {
+                sortedData = sortedData.filter(item => item.release_year > 0);
             }
+
             const totalPages = Math.ceil(sortedData.length / pageSize);
             document.getElementById('pageInfo').innerText = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
             document.getElementById('prevBtn').disabled = currentPage === 1;
@@ -528,11 +685,26 @@
         // 切换页码
         function changePage(delta) {
             let sortedData = [...allData];
-            if (searchKeyword) sortedData = sortedData.filter(item=>item.anime_name.includes(searchKeyword));
+
+            // 应用所有筛选条件
+            if (searchKeyword) sortedData = sortedData.filter(item=>
+                item.anime_name.includes(searchKeyword) || formatReleaseTime(item.release_time).includes(searchKeyword)
+            );
             const min = parseInt(document.getElementById('minEpisodes').value) || 0;
             const max = parseInt(document.getElementById('maxEpisodes').value) || Infinity;
             sortedData = sortedData.filter(item => item.episode_count >= min && item.episode_count <= max);
-            if (currentRankType==='episode') sortedData = sortedData.filter(item=>item.episode_count>0);
+            if (releaseYearFilter) {
+                sortedData = sortedData.filter(item => {
+                    if (item.release_year === 0) return false;
+                    const yearStr = item.release_year.toString();
+                    return yearStr === releaseYearFilter || yearStr.endsWith(releaseYearFilter);
+                });
+            }
+
+            // 排序过滤
+            if (currentRankType === 'episode') sortedData = sortedData.filter(item=>item.episode_count>0);
+            else if (currentRankType === 'release') sortedData = sortedData.filter(item=>item.release_year>0);
+
             const totalPages = Math.ceil(sortedData.length/pageSize);
             currentPage += delta;
             currentPage = Math.max(1, Math.min(currentPage, totalPages));
@@ -540,6 +712,7 @@
             updatePagination();
         }
 
+        // 窗口自适应
         window.addEventListener('resize', function() {
             followTop10Chart.resize();
             episodePieChart.resize();
